@@ -10,6 +10,8 @@ import (
 	"os"
 	"text/template"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -221,13 +223,13 @@ func (c *Client) request(url, name string) ([]byte, error) {
 	return buf, nil
 }
 
-func (c *Client) getVideos() (*List, error) {
-	const path = "/api/v2/videos/changed?since=%s&page=1"
+func (c *Client) getVideos(daysBack, page int) (*List, error) {
+	ts := time.Now().UTC().Add(-time.Hour * 24 * time.Duration(daysBack)).Format(timestampFormat)
+	path := fmt.Sprintf("/api/v2/videos/changed?since=%s&page=%d", ts, page)
 
-	ts := time.Now().UTC().Add(-time.Hour * 24).Format(timestampFormat)
-	buf, err := c.request(fmt.Sprintf(path, ts), "list.json")
+	buf, err := c.request(path, "list.json")
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "url: %s", path)
 	}
 
 	var list List
@@ -238,20 +240,20 @@ func (c *Client) getVideos() (*List, error) {
 	return &list, nil
 }
 
-func (c *Client) List(tmpl string) error {
+func (c *Client) List(tmpl string, daysBack, page int) error {
 	var err error
 	var t *template.Template
 
 	if tmpl != "" {
 		t, err = template.New("item").Parse(tmpl)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "template")
 		}
 	}
 
-	list, err := c.getVideos()
+	list, err := c.getVideos(daysBack, page)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "getVideos")
 	}
 
 	for _, e := range list.Videos {
@@ -271,8 +273,8 @@ func (c *Client) List(tmpl string) error {
 	return nil
 }
 
-func (c *Client) Download() error {
-	list, err := c.getVideos()
+func (c *Client) Download(daysBack, page int) error {
+	list, err := c.getVideos(daysBack, page)
 	if err != nil {
 		return err
 	}
