@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -82,6 +84,7 @@ type Client struct {
 	token     string
 	region    string
 	accountID int64
+	networkID int64
 	cli       *http.Client
 	cacheDir  string
 	localDir  string
@@ -119,6 +122,9 @@ func (c *Client) loadAuth() {
 		c.region = k
 	}
 	c.accountID = a.Account.ID
+	for n := range a.Networks {
+		c.networkID, _ = strconv.ParseInt(n, 10, 64)
+	}
 }
 
 func (c *Client) Login(email, password string) error {
@@ -186,10 +192,16 @@ func (c *Client) request(url, name string) ([]byte, error) {
 		return ioutil.ReadFile(c.cacheDir + "/" + name)
 	}
 
-	u := fmt.Sprintf(regionalHost, c.region) + url
+	var u string
+	if strings.HasPrefix(url, "https://") {
+		u = url
+	} else {
+		u = fmt.Sprintf(regionalHost, c.region) + url
+	}
+
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "new request")
 	}
 
 	req.Header.Set("TOKEN_AUTH", c.token)
@@ -197,19 +209,20 @@ func (c *Client) request(url, name string) ([]byte, error) {
 
 	resp, err := c.cli.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "do request")
 	}
 
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "read body")
 	}
 
 	if name != "" {
 		var b bytes.Buffer
 		if err := json.Indent(&b, buf, "", "\t"); err != nil {
-			return nil, err
+			log.Println(string(buf))
+			return nil, errors.Wrap(err, "reindent")
 		}
 		if err := ioutil.WriteFile(c.cacheDir+"/"+name, b.Bytes(), 0600); err != nil {
 			return nil, err
@@ -307,10 +320,86 @@ func (c *Client) Download(daysBack, page int) error {
 	return nil
 }
 
-func (c *Client) getHomeScreen() error {
+func (c *Client) getHomeScreen() (*Homescreen, error) {
 	const path = "/api/v3/accounts/%d/homescreen"
 
-	_, err := c.request(fmt.Sprintf(path, c.accountID), "homescreen.json")
+	buf, err := c.request(fmt.Sprintf(path, c.accountID), "homescreen.json")
+	if err != nil {
+		return nil, err
+	}
+
+	var hs Homescreen
+	if err := json.Unmarshal(buf, &hs); err != nil {
+		return nil, err
+	}
+	return &hs, nil
+}
+
+func (c *Client) PrintSystemInfo() error {
+	hs, err := c.getHomeScreen()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("SyncModules")
+	for i, sm := range hs.SyncModules {
+		fmt.Println("   ", i+1, sm.Name, "status:", sm.Status, "wifi:", sm.WifiStrength)
+	}
+	fmt.Println("Cameras")
+	for i, c := range hs.Cameras {
+		fmt.Println("   ", i+1, c.Name, "battery:", c.Battery)
+	}
+	fmt.Println("Storage")
+
+	fmt.Println("    Usage:", hs.VideoStats.Storage, "%")
+	fmt.Println("    AutoDelete:", hs.VideoStats.AutoDeleteDays, "days")
+
+	return nil
+}
+
+func (c *Client) GetCameraConfig(name string) error {
+	hs, err := c.getHomeScreen()
+	if err != nil {
+		return err
+	}
+
+	var camID int64
+	for _, c := range hs.Cameras {
+		if c.Name == name {
+			camID = c.ID
+			break
+		}
+	}
+
+	if camID == 0 {
+		fmt.Println("camera not found")
+	}
+
+	path := fmt.Sprintf("/network/%d/camera/%d/config", c.networkID, camID)
+	buf, err := c.request(path, fmt.Sprintf("camera-%d.json", camID))
+	if err != nil {
+		return err
+	}
+
+	var cc CameraConfig
+	if err := json.Unmarshal(buf, &cc); err != nil {
+		return err
+	}
+
+	cam := cc.Camera[0]
+	fmt.Println("Name:", cam.Name)
+	fmt.Printf("AlertInterval: %ds\n", cam.AlertInterval)
+	fmt.Printf("VideoLength: %ds\n", cam.VideoLength)
+	fmt.Printf("Temperature: %dF\n", cam.Temperature)
+	fmt.Printf("BatteryVoltage: %.2fV\n", float64(cam.BatteryVoltage)/100.0)
+
+	return nil
+}
+
+func (c *Client) doTest() error {
+	path := fmt.Sprintf("/api/v2/videos/count")
+
+	_, err := c.request(path, "videos_count.json")
 	if err != nil {
 		return err
 	}
