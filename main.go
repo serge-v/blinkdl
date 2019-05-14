@@ -1,3 +1,4 @@
+// blinkdl command downloads blink videos into local directory.
 package main
 
 import (

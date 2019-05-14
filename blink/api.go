@@ -1,3 +1,4 @@
+// Package blink provides some API to download videos from Blink security home system.
 package blink
 
 import (
