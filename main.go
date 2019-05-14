@@ -7,12 +7,13 @@ import (
 	"os"
 
 	"github.com/serge-v/autocomplete"
+	"github.com/serge-v/blinkdl/blink"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
 var (
 	ac           = flag.Bool("c", false, "for autocomplete support")
-	login        = flag.String("login", "", "login using `EMAIL`. Put password into XPASSWD env var")
+	login        = flag.String("login", "", "login using `EMAIL`. Reads password from XPASSWD or stdin")
 	list         = flag.Bool("list", false, "list videos")
 	listTemplate = flag.String("list-template", "", "item `template` for -list command. View all fields: '{{printf \"%+v\\n\\n\"  .}}'")
 	download     = flag.Bool("download", false, "download all videos into ~/.local/blink")
@@ -39,7 +40,9 @@ func main() {
 	}
 
 	var err error
-	cli := NewClient()
+	cli := blink.NewClient()
+	cli.DryRun = *dryRun
+
 	switch {
 	case *login != "":
 		pwd := os.Getenv("XPASSWD")
@@ -53,7 +56,7 @@ func main() {
 		}
 		err = cli.Login(*login, pwd)
 	case *test:
-		err = cli.doTest()
+		err = cli.DoTest()
 	case *info:
 		err = cli.PrintSystemInfo()
 	case *list:

@@ -1,5 +1,6 @@
-package main
+package blink
 
+// Homescreen is generated using gojson from /api/v3/accounts/{}/homescreen response.
 type Homescreen struct {
 	AppUpdates struct {
 		Code            int64  `json:"code"`

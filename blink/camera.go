@@ -1,5 +1,6 @@
-package main
+package blink
 
+// CameraConfig is generated using gojson from /network/{}/camera/{}/config response.
 type CameraConfig struct {
 	Camera []struct {
 		A1                        bool        `json:"a1"`

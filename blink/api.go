@@ -1,4 +1,4 @@
-package main
+package blink
 
 import (
 	"bytes"
@@ -23,18 +23,18 @@ const (
 	regionalHost    = "https://rest-%s.immedia-semi.com"
 )
 
-type Login struct {
+type login struct {
 	ClientSpecifier string `json:"client_specifier"`
 	Email           string `json:"email"`
 	Password        string `json:"password"`
 }
 
-type Network struct {
+type network struct {
 	Name      string
 	Onboarded bool
 }
 
-type LoginResponse struct {
+type loginResponse struct {
 	Account struct {
 		ID int64
 	}
@@ -45,10 +45,11 @@ type LoginResponse struct {
 	Client struct {
 		ID int64
 	}
-	Networks map[string]Network
+	Networks map[string]network
 	Region   map[string]string
 }
 
+// List is /api/v2/videos/changed?since={}&page={} response.
 type List struct {
 	Limit   int64 `json:"limit"`
 	PurgeID int64 `json:"purge_id"`
@@ -80,6 +81,7 @@ type List struct {
 	} `json:"videos"`
 }
 
+// Client is blink API client.
 type Client struct {
 	token     string
 	region    string
@@ -88,8 +90,10 @@ type Client struct {
 	cli       *http.Client
 	cacheDir  string
 	localDir  string
+	DryRun    bool // get responses from cache
 }
 
+// NewClient creates new instance of API client.
 func NewClient() *Client {
 	c := &Client{
 		cli:      &http.Client{},
@@ -112,7 +116,7 @@ func (c *Client) loadAuth() {
 		log.Fatal(err)
 	}
 
-	var a LoginResponse
+	var a loginResponse
 	if err := json.NewDecoder(f).Decode(&a); err != nil {
 		log.Fatal(err)
 	}
@@ -127,11 +131,12 @@ func (c *Client) loadAuth() {
 	}
 }
 
+// Login calls /login endpoint and receives authentication info.
 func (c *Client) Login(email, password string) error {
 	if password == "" {
 		return fmt.Errorf("empty password")
 	}
-	login := Login{
+	login := login{
 		Email:           email,
 		Password:        password,
 		ClientSpecifier: "iPhone 9.2 | 2.2 | 222",
@@ -166,7 +171,7 @@ func (c *Client) Login(email, password string) error {
 		return fmt.Errorf("invalid status: %s", resp.Status)
 	}
 
-	var loginResp LoginResponse
+	var loginResp loginResponse
 	if err := json.Unmarshal(buf, &loginResp); err != nil {
 		return err
 	}
@@ -187,7 +192,7 @@ func (c *Client) Login(email, password string) error {
 }
 
 func (c *Client) request(url, name string) ([]byte, error) {
-	if *dryRun {
+	if c.DryRun {
 		println("=== dry", name)
 		return ioutil.ReadFile(c.cacheDir + "/" + name)
 	}
@@ -253,6 +258,7 @@ func (c *Client) getVideos(daysBack, page int) (*List, error) {
 	return &list, nil
 }
 
+// List prints recent video list.
 func (c *Client) List(tmpl string, daysBack, page int) error {
 	var err error
 	var t *template.Template
@@ -286,6 +292,7 @@ func (c *Client) List(tmpl string, daysBack, page int) error {
 	return nil
 }
 
+// Download downloads recent videos into ~/.local/blink directory.
 func (c *Client) Download(daysBack, page int) error {
 	list, err := c.getVideos(daysBack, page)
 	if err != nil {
@@ -335,6 +342,7 @@ func (c *Client) getHomeScreen() (*Homescreen, error) {
 	return &hs, nil
 }
 
+// PrintSystemInfo prints some useful info.
 func (c *Client) PrintSystemInfo() error {
 	hs, err := c.getHomeScreen()
 	if err != nil {
@@ -357,6 +365,7 @@ func (c *Client) PrintSystemInfo() error {
 	return nil
 }
 
+// GetCameraConfig prints camera info.
 func (c *Client) GetCameraConfig(name string) error {
 	hs, err := c.getHomeScreen()
 	if err != nil {
@@ -396,13 +405,7 @@ func (c *Client) GetCameraConfig(name string) error {
 	return nil
 }
 
-func (c *Client) doTest() error {
-	path := fmt.Sprintf("/api/v2/videos/count")
-
-	_, err := c.request(path, "videos_count.json")
-	if err != nil {
-		return err
-	}
-
+// DoTest is a place for testing new methods.
+func (c *Client) DoTest() error {
 	return nil
 }
