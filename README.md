@@ -1,4 +1,5 @@
 # blinkdl
+
 Video downloader for Blink home security cameras.
 Uses ideas and specs from:
 
@@ -10,12 +11,11 @@ https://github.com/fronzbot/blinkpy
 
 https://github.com/NGRP/node-red-contrib-viseo
 
-
-##Install
+## Install
 
 	go get github.com/serge-v/blinkdl
 
-##Usage
+## Usage
 
 	blinkdl -login your@email.com
 	blinkdl -list [-days=DAYS] [-page=N]
