@@ -50,38 +50,6 @@ type loginResponse struct {
 	Region   map[string]string
 }
 
-// List is /api/v2/videos/changed?since={}&page={} response.
-type List struct {
-	Limit   int64 `json:"limit"`
-	PurgeID int64 `json:"purge_id"`
-	Videos  []struct {
-		AccountID       int64       `json:"account_id"`
-		Address         string      `json:"address"`
-		CameraID        int64       `json:"camera_id"`
-		CameraName      string      `json:"camera_name"`
-		CreatedAt       string      `json:"created_at"`
-		Deleted         bool        `json:"deleted"`
-		Description     string      `json:"description"`
-		Encryption      string      `json:"encryption"`
-		EncryptionKey   interface{} `json:"encryption_key"`
-		EventID         interface{} `json:"event_id"`
-		ID              int64       `json:"id"`
-		Length          int64       `json:"length"`
-		Locked          bool        `json:"locked"`
-		NetworkID       int64       `json:"network_id"`
-		NetworkName     string      `json:"network_name"`
-		Partial         bool        `json:"partial"`
-		Ready           bool        `json:"ready"`
-		Size            int64       `json:"size"`
-		StorageLocation string      `json:"storage_location"`
-		Thumbnail       string      `json:"thumbnail"`
-		TimeZone        string      `json:"time_zone"`
-		UpdatedAt       string      `json:"updated_at"`
-		UploadTime      int64       `json:"upload_time"`
-		Viewed          string      `json:"viewed"`
-	} `json:"videos"`
-}
-
 // Client is blink API client.
 type Client struct {
 	token     string
@@ -92,6 +60,7 @@ type Client struct {
 	cacheDir  string
 	localDir  string
 	DryRun    bool // get responses from cache
+	Debug     bool
 }
 
 // NewClient creates new instance of API client.
@@ -140,7 +109,7 @@ func (c *Client) Login(email, password string) error {
 	login := login{
 		Email:           email,
 		Password:        password,
-		ClientSpecifier: "iPhone 9.2 | 2.2 | 222",
+		ClientSpecifier: "iPhone XR | 3.4.12 | 349300",
 	}
 
 	var body bytes.Buffer
@@ -194,7 +163,7 @@ func (c *Client) Login(email, password string) error {
 
 func (c *Client) request(url, name string) ([]byte, error) {
 	if c.DryRun {
-		println("=== dry", name)
+		println("=== dry", url, name)
 		return ioutil.ReadFile(c.cacheDir + "/" + name)
 	}
 
@@ -205,6 +174,9 @@ func (c *Client) request(url, name string) ([]byte, error) {
 		u = fmt.Sprintf(regionalHost, c.region) + url
 	}
 
+	if c.Debug {
+		log.Println("GET", u)
+	}
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
@@ -222,6 +194,9 @@ func (c *Client) request(url, name string) ([]byte, error) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read body")
+	}
+	if c.Debug {
+		log.Println("resp:", string(buf))
 	}
 
 	if name != "" {
@@ -244,7 +219,9 @@ func (c *Client) request(url, name string) ([]byte, error) {
 
 func (c *Client) getVideos(daysBack, page int) (*List, error) {
 	ts := time.Now().UTC().Add(-time.Hour * 24 * time.Duration(daysBack)).Format(timestampFormat)
-	path := fmt.Sprintf("/api/v2/videos/changed?since=%s&page=%d", ts, page)
+	//	path := fmt.Sprintf("/api/v2/videos/changed?since=%s&page=%d", ts, page)
+	path := fmt.Sprintf("/api/v1/accounts/%d/media/changed?since=%s&page=%d", c.accountID, ts, page)
+	//	path := fmt.Sprintf("/api/v2/videos/page/%d", page)
 
 	buf, err := c.request(path, "list.json")
 	if err != nil {
@@ -276,6 +253,21 @@ func (c *Client) List(tmpl string, daysBack, page int) error {
 		return errors.Wrap(err, "getVideos")
 	}
 
+	for _, e := range list.Media {
+		if t != nil {
+			if err := t.Execute(os.Stdout, e); err != nil {
+				return err
+			}
+		} else {
+			viewed := "*"
+			if e.Watched {
+				viewed = " "
+			}
+
+			fmt.Println(e.CreatedAt, viewed, e.DeviceName)
+		}
+	}
+
 	for _, e := range list.Videos {
 		if t != nil {
 			if err := t.Execute(os.Stdout, e); err != nil {
@@ -298,6 +290,31 @@ func (c *Client) Download(daysBack, page int) error {
 	list, err := c.getVideos(daysBack, page)
 	if err != nil {
 		return err
+	}
+
+	for _, e := range list.Media {
+		if e.Deleted {
+			continue
+		}
+		ts, err := time.Parse("2006-01-02T15:04:05-07:00", e.CreatedAt)
+		if err != nil {
+			return err
+		}
+
+		fname := c.localDir + ts.Format("20060102-150405-") + e.DeviceName + ".mp4"
+		fi, err := os.Stat(fname)
+		if err == nil && fi.Size() > 0 {
+			continue
+		}
+
+		buf, err := c.request(e.Media, "")
+		if err != nil {
+			return err
+		}
+		if err := ioutil.WriteFile(fname, buf, 0700); err != nil {
+			return err
+		}
+		log.Println(fname, e.UpdatedAt)
 	}
 
 	for _, e := range list.Videos {

@@ -20,6 +20,7 @@ var (
 	download     = flag.Bool("download", false, "download all videos into ~/.local/blink")
 	test         = flag.Bool("test", false, "do test")
 	dryRun       = flag.Bool("dry", false, "use cached data")
+	debug        = flag.Bool("debug", false, "print debug info")
 	daysBack     = flag.Int("days", 1, "`DAYS` back")
 	page         = flag.Int("page", 1, "page number `NUM`")
 	cameraConfig = flag.String("camera-info", "", "get camera info by `NAME`")
@@ -43,6 +44,7 @@ func main() {
 	var err error
 	cli := blink.NewClient()
 	cli.DryRun = *dryRun
+	cli.Debug = *debug
 
 	switch {
 	case *login != "":
