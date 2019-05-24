@@ -286,12 +286,33 @@ func (c *Client) List(tmpl string, daysBack, page int) error {
 }
 
 // Download downloads recent videos into ~/.local/blink directory.
-func (c *Client) Download(daysBack, page int) error {
-	list, err := c.getVideos(daysBack, page)
-	if err != nil {
-		return err
-	}
+func (c *Client) Download(pages int) error {
+	timestamp := "1970-01-01T00:00Z"
 
+	//	timestampFormat = "2006-01-02T15:04:05-0700"
+	for page := 1; page < pages; page++ {
+		log.Println("page", page)
+		path := fmt.Sprintf("/api/v1/accounts/%d/media/changed?since=%s&page=%d", c.accountID, timestamp, page)
+
+		buf, err := c.request(path, "download.json")
+		if err != nil {
+			return errors.Wrapf(err, "url: %s", path)
+		}
+
+		var list List
+		if err := json.Unmarshal(buf, &list); err != nil {
+			return err
+		}
+
+		err = c.downloadPage(list)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) downloadPage(list List) error {
 	for _, e := range list.Media {
 		if e.Deleted {
 			continue

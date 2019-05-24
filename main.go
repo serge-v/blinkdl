@@ -23,6 +23,7 @@ var (
 	debug        = flag.Bool("debug", false, "print debug info")
 	daysBack     = flag.Int("days", 1, "`DAYS` back")
 	page         = flag.Int("page", 1, "page number `NUM`")
+	pages        = flag.Int("pages", 50, "`NUMBER` of pages to download")
 	cameraConfig = flag.String("camera-info", "", "get camera info by `NAME`")
 	info         = flag.Bool("info", false, "get system info")
 )
@@ -65,7 +66,7 @@ func main() {
 	case *list:
 		err = cli.List(*listTemplate, *daysBack, *page)
 	case *download:
-		err = cli.Download(*daysBack, *page)
+		err = cli.Download(*pages)
 	case *cameraConfig != "":
 		err = cli.GetCameraConfig(*cameraConfig)
 	}
