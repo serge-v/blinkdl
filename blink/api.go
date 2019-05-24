@@ -135,7 +135,6 @@ func (c *Client) Login(email, password string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("login resp: %s", string(buf))
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("invalid status: %s", resp.Status)
@@ -392,14 +391,17 @@ func (c *Client) PrintSystemInfo() error {
 	for i, sm := range hs.SyncModules {
 		fmt.Println("   ", i+1, sm.Name, "status:", sm.Status, "wifi:", sm.WifiStrength)
 	}
+	var cameras []string
 	fmt.Println("Cameras")
 	for i, c := range hs.Cameras {
 		fmt.Println("   ", i+1, c.Name, "battery:", c.Battery)
+		cameras = append(cameras, c.Name)
 	}
 	fmt.Println("Storage")
 
 	fmt.Println("    Usage:", hs.VideoStats.Storage, "%")
 	fmt.Println("    AutoDelete:", hs.VideoStats.AutoDeleteDays, "days")
+	ioutil.WriteFile(os.Getenv("HOME")+"/.cache/blink/cameras.txt", []byte(strings.Join(cameras, "\n")), 0600)
 
 	return nil
 }

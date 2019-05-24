@@ -4,8 +4,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/serge-v/autocomplete"
 	"github.com/serge-v/blinkdl/blink"
@@ -18,7 +20,6 @@ var (
 	list         = flag.Bool("list", false, "list videos")
 	listTemplate = flag.String("list-template", "", "item `template` for -list command. View all fields: '{{printf \"%+v\\n\\n\"  .}}'")
 	download     = flag.Bool("download", false, "download all videos into ~/.local/blink")
-	test         = flag.Bool("test", false, "do test")
 	dryRun       = flag.Bool("dry", false, "use cached data")
 	debug        = flag.Bool("debug", false, "print debug info")
 	daysBack     = flag.Int("days", 1, "`DAYS` back")
@@ -33,10 +34,24 @@ var (
 	acfile             = os.Getenv("HOME") + "/.config/bash_completion/blinkdl"
 )
 
+func getEmails() []string {
+	buf, _ := ioutil.ReadFile(os.Getenv("HOME") + "/.config/blink/emails.txt")
+	return strings.Split(strings.TrimSpace(string(buf)), "\n")
+}
+
+func getCameras() []string {
+	buf, _ := ioutil.ReadFile(os.Getenv("HOME") + "/.cache/blink/cameras.txt")
+	return strings.Split(strings.TrimSpace(string(buf)), "\n")
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	flag.Parse()
+
 	autocomplete.Init(acfile, autocompleteScript)
+	autocomplete.Handle("login", getEmails)
+	autocomplete.Handle("camera-info", getCameras)
+
 	if *ac {
 		autocomplete.Print()
 		return
@@ -51,7 +66,7 @@ func main() {
 	case *login != "":
 		pwd := os.Getenv("XPASSWD")
 		if pwd == "" {
-			fmt.Println("password?")
+			fmt.Print("password? ")
 			buf, err := terminal.ReadPassword(0)
 			if err != nil {
 				log.Fatal(err)
@@ -59,8 +74,10 @@ func main() {
 			pwd = string(buf)
 		}
 		err = cli.Login(*login, pwd)
-	case *test:
-		err = cli.DoTest()
+		if err != nil {
+			log.Fatalf("%+v", err)
+		}
+		err = cli.PrintSystemInfo()
 	case *info:
 		err = cli.PrintSystemInfo()
 	case *list:
@@ -74,5 +91,4 @@ func main() {
 	if err != nil {
 		log.Fatalf("%+v", err)
 	}
-
 }
